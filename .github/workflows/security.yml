@@ -30,7 +30,9 @@ jobs:
       # --sarif + --output: il report persiste anche quando il job è rosso
       # (gli step successivi girano con !cancelled()).
       - run: uvx semgrep scan --config p/python --config p/security-audit --error --sarif --output semgrep.sarif
-      - run: uvx bandit -r . -ll -f sarif -o bandit.sarif
+      # -f sarif non è nativo di bandit: serve il formatter esterno
+      # (ephemeral in uvx, non tocca il lock).
+      - run: uvx --with bandit-sarif-formatter bandit -r . -ll -f sarif -o bandit.sarif
         if: ${{ !cancelled() }}
 
       - name: SARIF come artefatto (retention 90gg)
