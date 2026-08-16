@@ -1,0 +1,14 @@
+# Mai nel contesto di build (dipendenze e output locali: si installano in image)
+node_modules
+.next
+npm-debug.log*
+
+# Segreti e ambiente locale
+.env
+.env.*
+
+# Documentazione e meta-file: non servono nell'immagine
+*.md
+.gitignore
+Dockerfile
+.dockerignore

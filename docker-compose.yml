@@ -1,0 +1,40 @@
+# Stack locale: backend FastAPI + frontend Next.js dietro Caddy.
+# Ogni servizio ha il suo Dockerfile nel contesto di build dedicato, con base
+# pinnata per digest e HEALTHCHECK — qui si orchestrano, non si costruiscono.
+
+services:
+  backend:
+    build: ./backend
+    # Nessuna porta pubblicata sull'host: il backend è raggiungibile solo
+    # dentro la rete del compose, via Caddy. L'HEALTHCHECK del Dockerfile
+    # resta il segnale per depends_on.
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    expose:
+      - "3000"
+    environment:
+      # Nome del servizio compose = DNS interno della rete: il browser non
+      # passa mai da qui, è il server Next (SSR) a chiamare il backend.
+      BACKEND_URL: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Unico punto d'ingresso: routing /api/* -> backend, il resto -> frontend.
+  # Build dedicata (digest pinnato + apk upgrade + Caddyfile nell'immagine).
+  caddy:
+    build: ./caddy
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s

@@ -4,6 +4,7 @@
 .venv
 venv
 node_modules
+frontend/.next
 __pycache__
 uv.lock
 sbom.json

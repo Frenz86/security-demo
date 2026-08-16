@@ -1,6 +1,7 @@
 # security-demo
 
-API FastAPI minima dietro una pipeline di sicurezza completa e verificabile:
+Stack a tre servizi — API FastAPI, frontend Next.js, proxy Caddy — dietro una
+pipeline di sicurezza completa e verificabile:
 `pyproject.toml → uv.lock → immagine → firma → registry → scan di produzione`.
 Ogni anello è controllato in CI e ogni controllo lascia evidenza scaricabile.
 
@@ -11,7 +12,7 @@ GitHub Free su repo privato**: nessuna licenza, nessun abbonamento.
 ## Il flusso in un colpo d'occhio
 
 ```text
-              pyproject.toml         dipendenze pinnate ==, requires-python ==3.13.*
+              backend/pyproject.toml    dipendenze pinnate ==, requires-python ==3.13.*
                      |
                      v
               uv.lock                committato, hash di ogni artifact PyPI
@@ -56,16 +57,27 @@ GitHub Free su repo privato**: nessuna licenza, nessun abbonamento.
 
 ```
 security-demo/
-├── main.py                 # l'app FastAPI ( / , /health )
-├── pyproject.toml          # dipendenze pinnate (==), requires-python ==3.13.*
-├── uv.lock                 # committato, con hash — è questo che va in produzione
-├── Dockerfile              # base pinnata per digest, utente non-root, uv sync --frozen
-├── .dockerignore           # segreti e ambiente locale mai nel contesto di build
+├── backend/                # l'API FastAPI ( / , /health )
+│   ├── main.py
+│   ├── pyproject.toml      # dipendenze pinnate (==), requires-python ==3.13.*
+│   ├── uv.lock             # committato, con hash — è questo che va in produzione
+│   ├── Dockerfile          # base pinnata per digest, utente non-root, uv sync --frozen
+│   └── .dockerignore       # segreti e ambiente locale mai nel contesto di build
+├── frontend/               # UI Next.js (App Router, output standalone)
+│   ├── app/                # una pagina che consuma l'API del backend (SSR)
+│   ├── package.json        # versioni pinnate, lock committato (npm ci in build)
+│   ├── package-lock.json
+│   ├── Dockerfile          # multi-stage, base node pinnata per digest, utente non-root
+│   └── .dockerignore
+├── caddy/
+│   ├── Caddyfile           # unico ingresso: /api/* -> backend, il resto -> frontend
+│   └── Dockerfile          # immagine ufficiale pinnata per digest + apk upgrade
+├── docker-compose.yml      # stack locale: backend + frontend non esposti, solo Caddy
 ├── README.md               # questo documento: pipeline + policy di sicurezza
 ├── .semgrepignore          # path esclusi dalla SAST (sostituisce i default)
 ├── .trivyignore            # eccezioni CVE: ognuna motivata e con scadenza
 └── .github/
-    ├── dependabot.yml      # aggiornamenti uv / docker / actions, settimanali
+    ├── dependabot.yml      # aggiornamenti uv / npm / docker / actions, settimanali
     ├── CODEOWNERS          # owner della supply chain (review obbligatoria)
     └── workflows/
         ├── security.yml    # secrets → SAST → deps → build → scan → SBOM → push+firma
@@ -94,9 +106,25 @@ security-demo/
 
 ## Sviluppo locale
 
+Stack completo con Docker — un solo ingresso (Caddy), backend e frontend
+restano nella rete interna del compose:
+
 ```bash
-uv sync                            # installa l'ambiente dal lock
-uv run uvicorn main:app --reload   # http://localhost:8000
+docker compose up --build   # UI su http://localhost, API su http://localhost/api
+```
+
+Oppure i due ambienti separati:
+
+```bash
+# backend — http://localhost:8000
+cd backend
+uv sync
+uv run uvicorn main:app --reload
+
+# frontend — http://localhost:3000 (BACKEND_URL default: localhost:8000)
+cd frontend
+npm install
+npm run dev
 ```
 
 ## La CI — `security.yml`
@@ -140,11 +168,12 @@ pubblico, si aggiunge la branch protection su `main` con `secrets`, `sast`,
 
 ## Dependabot
 
-Aggiornamenti settimanali su tre ecosistemi: `uv` (pyproject + lock insieme),
-`docker`, `github-actions`. Con le versioni pinnate `==`, ogni bump è una PR
-singola e leggibile. (I *version updates* sono gratuiti su ogni repo; la tab
-"Dependabot alerts" su privato richiede GHAS — il ruolo di audit lo fa già
-`uv-secure` + Trivy in CI.)
+Aggiornamenti settimanali su quattro ecosistemi: `uv` (backend: pyproject +
+lock insieme), `npm` (frontend: package.json + lock), `docker` (le due
+Dockerfile, major escluse per policy) e `github-actions`. Con le versioni
+pinnate, ogni bump è una PR singola e leggibile. (I *version updates* sono
+gratuiti su ogni repo; la tab "Dependabot alerts" su privato richiede GHAS —
+il ruolo di audit lo fa già `uv-secure` + Trivy in CI.)
 
 ---
 
@@ -175,9 +204,11 @@ chieda di restare anonimo).
 
 ## Scope
 
-In scope: codice applicativo (`main.py`), pipeline (`Dockerfile`,
-`.github/workflows/`), gestione delle dipendenze (`pyproject.toml`,
-`uv.lock`), segreti e configurazione dei repository.
+In scope: codice applicativo (`backend/main.py`, `frontend/app/`), pipeline
+(`backend/Dockerfile`, `frontend/Dockerfile`, `caddy/Caddyfile`,
+`docker-compose.yml`, `.github/workflows/`), gestione delle dipendenze
+(`backend/pyproject.toml`, `backend/uv.lock`, `frontend/package.json`,
+`frontend/package-lock.json`), segreti e configurazione dei repository.
 
 Out of scope: social engineering, DoS, report da tool automatici senza
 analisi, vulnerabilità su versioni non più supportate, problemi su servizi
@@ -237,13 +268,56 @@ finding che sopprimono.
 | --- | --- |
 | A.8.25 ciclo di sviluppo sicuro | publication gate (un build rosso non pubblica), workflow su ogni PR/push, CODEOWNERS |
 | A.8.28 secure coding | semgrep + bandit in CI, eccezioni tracciate |
-| A.8.29 security testing | SAST, secret scanning, audit dipendenze, Trivy (config + immagine), SBOM |
+| A.8.29 security testing | SAST, secret scanning, audit dipendenze, Trivy (config + immagine), SBOM, validazione locale documentata qui sotto |
 | A.8.30 supply chain / sviluppo esternalizzato | lock con hash, `--frozen`, base per digest, azioni pinnate SHA, firma cosign, `PROD_DIGEST` |
+| A.8.8 gestione vulnerabilità tecniche | gate HIGH/CRITICAL in CI, `trivy-prod` settimanale sull'immagine in registry, SLA di remediation, `.trivyignore` solo con motivazione e scadenza |
+| A.8.9 gestione della configurazione | immagini minime multi-stage, utente non-root, digest pinnati (python, node, caddy), toolchain di build rimosse dal runtime, HEALTHCHECK, `.dockerignore` |
+| A.8.20/A.8.22 sicurezza e segregazione di rete | Caddy unico ingresso, backend e frontend senza porte pubblicate sull'host, rete interna al compose |
+| A.8.24 uso della crittografia | TLS automatico ACME di Caddy con hostname reale, firma cosign dell'immagine pubblicata |
 | A.5.35 / A.5.37 disclosure e procedure | la policy di sicurezza qui sopra |
 
 **Fuori scope di questa demo** (da coprire altrove): DAST, training secure
 coding con record, ambienti dev/test/prod separati (A.8.31), policy di
 sviluppo sicuro completa e owner nominato.
+
+## Validazione degli step (2026-08-16, post-ristrutturazione)
+
+Ogni step della pipeline rieseguito in locale con i parametri della CI,
+sul layout backend/ + frontend/ + caddy/:
+
+| Step CI | Verifica locale | Esito |
+| --- | --- | --- |
+| `secrets` | gitleaks 8.28.0 sull'intera history | ✅ 11 commit, nessun leak |
+| `sast` | semgrep `p/python` + `p/security-audit --error` | ✅ 222 regole su 34 file, 0 finding |
+| `sast` | bandit `-r backend -ll` | ✅ 0 issue |
+| `deps` | `uv lock --check` | ✅ lock coerente col manifest |
+| `deps` | `uv-secure uv.lock` | ✅ 42 dipendenze, nessuna CVE |
+| `container` | build delle 3 immagini (`docker compose build`) | ✅ |
+| `container` | Trivy config scan (`backend/Dockerfile`, `frontend/Dockerfile`) | ✅ 0 misconfiguration |
+| `container` | Trivy image scan backend (HIGH/CRITICAL) | ✅ 0 |
+| — | Trivy image scan frontend (non ancora in CI) | ✅ 0 dopo rimozione del toolchain npm dal runtime |
+| — | Trivy image scan caddy (non in CI) | ⚠️ vedi sotto |
+| runtime | `docker compose up`: UI e API servite da Caddy | ✅ `/api/health` e `/` OK |
+
+Due note oneste su ciò che la validazione ha prodotto:
+
+1. **Il toolchain npm non appartiene al runtime.** Il primo scan del frontend
+   segnava 7 CVE (tar, undici, brace-expansion…) tutte in
+   `usr/local/lib/node_modules/npm` — l'npm **della base image**, non delle
+   dipendenze dell'app. Rimosso dallo stage runner, come il backend fa con
+   pip/setuptools: fix alla radice, zero eccezioni in `.trivyignore`.
+2. **Caddy: risk acceptance documentata.** L'immagine è pinnata per digest e
+   il layer alpine è bonificato in build (`apk upgrade`), ma il binario porta
+   14 CVE HIGH della stdlib Go 1.26.3, fixate in Go 1.26.6/1.25.13: alla data
+   odierna non esiste ancora un release caddy ricostruita con Go patchato.
+   Rimedio: la PR di digest di Dependabot (`/caddy`) appena upstream rilascia.
+   Contesto: proxy di sviluppo, ingresso unico, senza TLS in locale — non è
+   l'immagine che la CI pubblica in produzione.
+
+**Gap noti** (da chiudere, non da nascondere): la CI builda, scansiona, firma
+e pubblica **solo l'immagine backend**. Frontend e caddy sono validati
+localmente (tabella sopra); portarli nel job `container` — build, Trivy, SBOM,
+push e firma — è l'estensione naturale della pipeline.
 
 # Setup richiesto (una tantum)
 

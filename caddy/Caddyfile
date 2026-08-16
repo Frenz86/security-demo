@@ -1,0 +1,14 @@
+# Entry unica dello stack: backend e frontend non pubblicano porte sull'host,
+# si passa solo da qui. Con un hostname reale Caddy gestisce TLS automatico
+# (ACME/Let's Encrypt); in locale risponde in HTTP su :80.
+
+:80 {
+	# API del backend: il prefisso /api viene rimosso prima del proxy
+	# (/api/health -> /health, /api/ -> /).
+	handle_path /api/* {
+		reverse_proxy backend:8000
+	}
+
+	# Tutto il resto al frontend Next.js.
+	reverse_proxy frontend:3000
+}

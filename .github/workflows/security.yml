@@ -29,10 +29,12 @@ jobs:
 
       # --sarif + --output: il report persiste anche quando il job è rosso
       # (gli step successivi girano con !cancelled()).
+      # Semgrep gira sulla root (le regole p/python non toccano il frontend,
+      # node_modules è in .semgrepignore); bandit è Python-only: scope su backend/.
       - run: uvx semgrep scan --config p/python --config p/security-audit --error --sarif --output semgrep.sarif
       # -f sarif non è nativo di bandit: serve il formatter esterno
       # (ephemeral in uvx, non tocca il lock).
-      - run: uvx --with bandit-sarif-formatter bandit -r . -ll -f sarif -o bandit.sarif
+      - run: uvx --with bandit-sarif-formatter bandit -r backend -ll -f sarif -o bandit.sarif
         if: ${{ !cancelled() }}
 
       - name: SARIF come artefatto (retention 90gg)
@@ -53,6 +55,9 @@ jobs:
 
   deps:
     runs-on: ubuntu-latest
+    # Il manifest Python vive in backend/: lock check e audit girano lì.
+    defaults:
+      run: { working-directory: backend }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@ae62891fec2bb8e7d6c99fc78c9fec3a63790f8d # v10.0.0
@@ -80,10 +85,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Scan config sulla root: copre entrambi i Dockerfile e il compose.
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with: { scan-type: config, scan-ref: ., exit-code: '0' }
 
-      - run: docker build -t security-demo:${{ github.sha }} .
+      # Il contesto di build del backend è backend/ (la CI pubblica l'immagine
+      # del backend; il frontend è in docker-compose per lo sviluppo locale).
+      - run: docker build -t security-demo:${{ github.sha }} ./backend
 
       - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

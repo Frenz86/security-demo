@@ -4,12 +4,18 @@ updates:
   # Nota: il supporto uv è arrivato dopo quello pip — verifica che le PR si
   # aprano davvero nelle prime settimane; se non lo fanno, il fallback è Renovate.
   - package-ecosystem: uv
-    directory: /
+    directory: /backend
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+
+  # npm (frontend): package.json + package-lock.json insieme.
+  - package-ecosystem: npm
+    directory: /frontend
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
 
   - package-ecosystem: docker
-    directory: /
+    directory: /backend
     schedule: { interval: weekly }
     # La major della base deve muoversi insieme a requires-python e al lock:
     # si migra a mano, in un'unica PR (pyproject.toml + uv lock + Dockerfile).
@@ -17,6 +23,24 @@ updates:
     # sono gli aggiornamenti di sicurezza della base.
     ignore:
       - dependency-name: python
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule: { interval: weekly }
+    # Stessa policy del backend: la major di node si migra a mano (va
+    # coordinata con l'engine richiesto da Next), patch e digest automatici.
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
+
+  # Il digest di caddy è la via di remediation per le CVE del binario Go:
+  # quando upstream rilancia con Go patchato, è la PR di Dependabot a portarla.
+  - package-ecosystem: docker
+    directory: /caddy
+    schedule: { interval: weekly }
+    ignore:
+      - dependency-name: caddy
         update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions

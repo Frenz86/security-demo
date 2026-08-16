@@ -1,0 +1,9 @@
+# Il contesto di build è backend/: segreti e ambiente locale mai nell'immagine.
+.env
+.env.*
+.venv
+__pycache__/
+*.pyc
+
+# Documentazione: non serve nel runtime
+*.md
