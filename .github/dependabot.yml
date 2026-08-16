@@ -11,6 +11,13 @@ updates:
   - package-ecosystem: docker
     directory: /
     schedule: { interval: weekly }
+    # La major della base deve muoversi insieme a requires-python e al lock:
+    # si migra a mano, in un'unica PR (pyproject.toml + uv lock + Dockerfile).
+    # Patch e aggiornamenti di digest di 3.13-slim restano automatici —
+    # sono gli aggiornamenti di sicurezza della base.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /
