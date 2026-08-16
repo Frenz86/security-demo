@@ -9,10 +9,23 @@ updates:
     open-pull-requests-limit: 5
 
   # npm (frontend): package.json + package-lock.json insieme.
+  # Patch e minor fluiscono da sole; le major del toolchain si muovono a
+  # mano, in modo coordinato — come le basi delle immagini Docker:
+  #   - @types/node segue la major del runtime (node:24-alpine);
+  #   - typescript major (6/7: la 7 è il rewrite nativo) va validata col
+  #     build di Next e con eslint-config-next;
+  #   - eslint major deve aspettare il supporto di eslint-config-next.
   - package-ecosystem: npm
     directory: /frontend
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /backend
