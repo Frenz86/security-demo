@@ -1,0 +1,5 @@
+# Una CVE per riga. Ogni eccezione deve avere: chi l'ha approvata, perché, entro quando rivederla.
+# Nessuna eccezione permanente: alla scadenza riappare e va rigiustificata.
+#
+# Esempio:
+# CVE-2025-12345  # approvata da X: nessun fix disponibile, code path non raggiungibile — rivedere entro 2026-09-30

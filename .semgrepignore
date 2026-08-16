@@ -1,0 +1,9 @@
+# Usato da `semgrep scan` nella CI. Se esiste, sostituisce le ignore di default:
+# tienilo aggiornato quando aggiungi directory di output o vendorizzate.
+.git
+.venv
+venv
+node_modules
+__pycache__
+uv.lock
+sbom.json

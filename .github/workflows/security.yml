@@ -1,0 +1,133 @@
+name: security
+on:
+  pull_request:
+  push: { branches: [main] }
+  schedule: [{ cron: '0 6 * * 1' }]
+
+permissions: { contents: read }
+
+# Tutte le azioni sono pinnate per SHA commit (il tag versione è nel commento):
+# un tag è mobile, un SHA no. È la stessa garanzia che chiediamo al Dockerfile.
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { fetch-depth: 0 }
+      - run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz \
+            | tar xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --redact --exit-code 1
+
+  sast:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: astral-sh/setup-uv@22695119d769bdb6f7032ad67b9bca0ef8c4a174 # v5.4.0
+        with: { enable-cache: true }
+
+      # --sarif + --output: il report persiste anche quando il job è rosso
+      # (gli step successivi girano con !cancelled()).
+      - run: uvx semgrep scan --config p/python --config p/security-audit --error --sarif --output semgrep.sarif
+      - run: uvx bandit -r . -ll -f sarif -o bandit.sarif
+        if: ${{ !cancelled() }}
+
+      - name: SARIF come artefatto (retention 90gg)
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sast-sarif-${{ github.sha }}
+          path: '*.sarif'
+          retention-days: 90
+
+      # NOTA su Code Scanning: la pubblicazione SARIF (github/codeql-action/
+      # upload-sarif) è gratis SOLO su repo pubblici; su un repo privato
+      # richiede GitHub Advanced Security (pagato). L'evidenza d'audit qui è
+      # l'artefatto qui sopra. Se il repo diventa pubblico (o arriva GHAS),
+      # riaggiungi con permissions security-events: write:
+      #   - uses: github/codeql-action/upload-sarif@<sha> # v3
+      #     with: { sarif_file: semgrep.sarif }
+
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: astral-sh/setup-uv@22695119d769bdb6f7032ad67b9bca0ef8c4a174 # v5.4.0
+
+      # Fallisce se il lock è stale rispetto a pyproject.toml: intercetta il
+      # caso di dipendenza aggiunta a mano che la CI scannerrebbe senza averla
+      # mai risolta.
+      - name: Lock coerente con pyproject
+        run: uv lock --check
+
+      - name: Audit
+        run: uvx uv-secure uv.lock
+      # alternativa, se preferisci pip-audit:
+      # run: |
+      #   uv export --frozen --no-dev --no-emit-project -o requirements.txt
+      #   uvx pip-audit -r requirements.txt --strict
+
+  container:
+    needs: [secrets, sast, deps]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write    # firma keyless cosign (OIDC del workflow)
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with: { scan-type: config, scan-ref: ., exit-code: '0' }
+
+      - run: docker build -t security-demo:${{ github.sha }} .
+
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: security-demo:${{ github.sha }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: security-demo:${{ github.sha }}
+          format: cyclonedx
+          output: sbom.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with: { name: sbom-${{ github.sha }}, path: sbom.json, retention-days: 90 }
+
+      # ghcr richiede il nome repository in lowercase (gli owner possono
+      # contenere maiuscole, es. Frenz86).
+      - name: Nome immagine
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/security-demo" >> "$GITHUB_ENV"
+
+      # Il push usa GITHUB_TOKEN (packages: write basta); la scrittura della
+      # variable PROD_DIGEST no: il GITHUB_TOKEN di default non può gestire le
+      # Actions variables, serve il PAT nel secret GH_PAT_VARIABLES
+      # (fine-grained → Variables: Read and write).
+      - name: Push + registra digest
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_VARIABLES }}
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          FULL_IMAGE="${IMAGE}:${{ github.sha }}"
+          docker tag security-demo:${{ github.sha }} "$FULL_IMAGE"
+          docker push "$FULL_IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$FULL_IMAGE" | cut -d@ -f2)
+          echo "DIGEST=$DIGEST" >> "$GITHUB_ENV"
+          gh variable set PROD_DIGEST --body "$DIGEST" -R "${{ github.repository }}"
+
+      # Firma keyless: l'identità è il token OIDC di questo workflow, il
+      # record è pubblico su Rekor. La verifica è in trivy-prod.yml: chi
+      # scansiona dimostra che l'immagine è quella firmata da questa CI,
+      # non da un push manuale sul registry.
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        if: github.ref == 'refs/heads/main'
+      - name: Firma l'immagine
+        if: github.ref == 'refs/heads/main'
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"

@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Ecosistema "uv": aggiorna pyproject.toml + uv.lock insieme.
+  # Nota: il supporto uv è arrivato dopo quello pip — verifica che le PR si
+  # aprano davvero nelle prime settimane; se non lo fanno, il fallback è Renovate.
+  - package-ecosystem: uv
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directory: /
+    schedule: { interval: weekly }
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

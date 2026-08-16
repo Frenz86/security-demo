@@ -1,0 +1,12 @@
+# Mai nel contesto di build (segreti, CI, ambiente locale)
+.env
+.git
+.github
+.venv
+__pycache__/
+*.pyc
+
+# Documentazione e config scanner: non servono nell'immagine
+*.md
+.semgrepignore
+.trivyignore

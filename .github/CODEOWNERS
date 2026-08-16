@@ -1,0 +1,11 @@
+# Il proprietario della supply chain: ogni modifica a questi file richiede
+# la review di chi risponde della pipeline (attiva con branch protection).
+
+/main.py         @Frenz86
+/Dockerfile      @Frenz86
+/pyproject.toml  @Frenz86
+/uv.lock         @Frenz86
+/README.md       @Frenz86
+/.trivyignore    @Frenz86
+/.semgrepignore  @Frenz86
+/.github/        @Frenz86

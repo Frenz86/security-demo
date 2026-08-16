@@ -1,0 +1,11 @@
+# Segreti locali: mai committati
+.env
+
+# Ambiente e cache
+.venv/
+__pycache__/
+*.pyc
+
+# Artefatti generati (CI / export locali)
+sbom.json
+requirements.txt

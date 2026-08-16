@@ -1,0 +1,17 @@
+[project]
+name = "security-demo"
+version = "0.1.0"
+requires-python = "==3.13.*"
+dependencies = [
+    "numpy==2.5.2",
+    "openpyxl==3.1.5",
+    "fastapi==0.141.1",
+    "uvicorn==0.52.3",
+]
+
+[dependency-groups]
+dev = ["bandit", "uv-secure"]
+
+# Il pin esatto di requires-python non è pedanteria: senza, uv risolve per un
+# range e il lock contiene rami condizionali (es. 3.14) che non useresti mai
+# ma che l'audit delle dipendenze ti segnala comunque.

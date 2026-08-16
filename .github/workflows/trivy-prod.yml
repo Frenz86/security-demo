@@ -1,0 +1,49 @@
+name: trivy-prod
+# Scansiona l'immagine ESATTA in produzione (per digest, non per tag):
+# copre le CVE pubblicate dopo il merge. Prima verifica la firma cosign —
+# se l'immagine non è quella firmata dalla CI, la run è rossa e non si scan.
+on:
+  schedule: [{ cron: '0 4 * * 1' }]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read    # pull dell'immagine privata da ghcr
+
+jobs:
+  scan-prod:
+    runs-on: ubuntu-latest
+    steps:
+      # Lettura della variable PROD_DIGEST: anche qui serve il PAT,
+      # GITHUB_TOKEN non legge le variables.
+      - name: Leggi il digest in produzione
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_VARIABLES }}
+        run: |
+          DIGEST=$(gh variable get PROD_DIGEST -R "${{ github.repository }}" --json value --jq .value)
+          if [ -z "$DIGEST" ]; then echo "PROD_DIGEST vuota: prima push su main non ancora avvenuta?"; exit 1; fi
+          echo "PROD_IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/security-demo@$DIGEST" >> "$GITHUB_ENV"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Identità = workflow di questa organizzazione/utente, emessa dal OIDC
+      # di GitHub. Stringi il regexp al workflow specifico se vuoi essere
+      # più severo: ^https://github.com/<owner>/<repo>/.github/workflows/security.yml
+      - name: Verifica firma
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${GITHUB_REPOSITORY_OWNER}/" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$PROD_IMAGE"
+
+      - name: Trivy sull'immagine in registry
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          image-ref: ${{ env.PROD_IMAGE }}
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
