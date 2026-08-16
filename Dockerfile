@@ -1,6 +1,6 @@
 # Stage pinnato per tag, non curl | sh: il binario uv è verificato dal digest del tag,
 # non codice scaricato a build time.
-FROM ghcr.io/astral-sh/uv:0.10.9 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.3 AS uv
 
 # Base pinnata per digest: rebuild riproducibile anche se il tag 3.13-slim viene aggiornato.
 FROM python:3.13-slim@sha256:8fef26df932191825664e4957ff488c96dfe64918327634a357a55facbc994d3 AS base
