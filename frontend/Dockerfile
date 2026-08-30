@@ -1,7 +1,7 @@
 # Base pinnata per digest (index multi-arch), come il backend: rebuild
 # riproducibile anche se il tag 24-alpine viene aggiornato a tua insaputa.
 # 24 è l'LTS attiva di Node.
-FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS base
+FROM node:24-alpine@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS base
 
 # Stage dipendenze: layer invalidato solo se cambia il lock.
 # npm ci installa esattamente package-lock.json — l'equivalente npm di
