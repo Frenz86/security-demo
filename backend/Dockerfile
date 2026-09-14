@@ -3,7 +3,7 @@
 FROM ghcr.io/astral-sh/uv:0.12.4 AS uv
 
 # Base pinnata per digest: rebuild riproducibile anche se il tag 3.13-slim viene aggiornato.
-FROM python:3.13-slim@sha256:8fef26df932191825664e4957ff488c96dfe64918327634a357a55facbc994d3 AS base
+FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS base
 COPY --from=uv /uv /usr/local/bin/uv
 
 # La base image porta pip, setuptools e msgpack nella site-packages di sistema:
