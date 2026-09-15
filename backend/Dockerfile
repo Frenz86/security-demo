@@ -6,6 +6,11 @@ FROM ghcr.io/astral-sh/uv:0.12.4 AS uv
 FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS base
 COPY --from=uv /uv /usr/local/bin/uv
 
+# La base pinnata per digest non include le patch di sicurezza Debian pubblicate
+# dopo la build di quel digest: applichiamo gli upgrade apt per chiudere le CVE
+# note su gzip/libpcre2/libsqlite3/perl-base senza spostare il pin dell'immagine.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # La base image porta pip, setuptools e msgpack nella site-packages di sistema:
 # il runtime gira nel venv di uv e non li tocca mai. Rimuoverli elimina alla
 # radice CVE-2025-47273 (setuptools) e GHSA-6v7p-g79w-8964 (msgpack) — senza
