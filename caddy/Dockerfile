@@ -5,7 +5,7 @@
 #      in immagine — qui si chiude subito;
 #   2. la config entra nell'immagine invece che via volume: quello che gira è
 #      quello committato, rebuildato e scansionabile.
-FROM caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+FROM caddy:2-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
 
 RUN apk upgrade --no-cache
 
