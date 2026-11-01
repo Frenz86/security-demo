@@ -3,7 +3,7 @@
 FROM ghcr.io/astral-sh/uv:0.12.4 AS uv
 
 # Base pinnata per digest: rebuild riproducibile anche se il tag 3.13-slim viene aggiornato.
-FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS base
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS base
 COPY --from=uv /uv /usr/local/bin/uv
 
 # La base pinnata per digest non include le patch di sicurezza Debian pubblicate
