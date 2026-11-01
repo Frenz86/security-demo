@@ -5,7 +5,7 @@ requires-python = "==3.13.*"
 dependencies = [
     "numpy==2.5.2",
     "openpyxl==3.1.5",
-    "fastapi==0.141.1",
+    "fastapi==0.162.0",
     "uvicorn==0.52.3",
 ]
 
