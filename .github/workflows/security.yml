@@ -139,7 +139,7 @@ jobs:
       # record è pubblico su Rekor. La verifica è in trivy-prod.yml: chi
       # scansiona dimostra che l'immagine è quella firmata da questa CI,
       # non da un push manuale sul registry.
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
         if: github.ref == 'refs/heads/main'
       - name: Firma l'immagine
         if: github.ref == 'refs/heads/main'
